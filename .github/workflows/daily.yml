@@ -1,0 +1,36 @@
+name: Daily Odds Scrape
+
+on:
+  schedule:
+    - cron: '5 7 * * *'  # 5:05pm AEST daily
+  workflow_dispatch:       # allows manual trigger from GitHub
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 playwright
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Run scraper
+        run: python odds_tracker.py
+
+      - name: Commit updated files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add index.html data/odds_history.json
+          git diff --staged --quiet || git commit -m "Update odds $(date +%Y-%m-%d)"
+          git push
