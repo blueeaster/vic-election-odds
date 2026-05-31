@@ -2,7 +2,10 @@ name: Daily Odds Scrape
 
 on:
   schedule:
-    - cron: '5 7 * * *'
+    - cron: '0 17 * * *'   # 3am AEST
+    - cron: '0 23 * * *'   # 9am AEST
+    - cron: '0 5 * * *'    # 3pm AEST
+    - cron: '0 11 * * *'   # 9pm AEST
   workflow_dispatch:
 
 permissions:
@@ -37,5 +40,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add index.html data/odds_history.json
-          git diff --staged --quiet || git commit -m "Update odds $(date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "Update odds $(date +%Y-%m-%d %H:%M)"
           git push
