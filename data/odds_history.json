@@ -175,7 +175,7 @@
       {
         "source": "Sportsbet",
         "odds": {
-          "Labor": 2.12,
+          "Labor": 2.02,
           "Coalition": 2.04
         }
       },
@@ -186,12 +186,72 @@
           "Coalition": 2.05,
           "Other": 7
         }
+      },
+      {
+        "source": "bet365",
+        "odds": {
+          "Labor": 1.8,
+          "Coalition": 2.3,
+          "Other": 8.0
+        }
+      },
+      {
+        "source": "BetMGM",
+        "odds": {
+          "Labor": 1.83,
+          "Coalition": 2.3,
+          "Other": 9.0
+        }
+      },
+      {
+        "source": "BetGoodwin",
+        "odds": {
+          "Labor": 1.8,
+          "Coalition": 2.2,
+          "Other": 8.0
+        }
+      },
+      {
+        "source": "Virgin Bet",
+        "odds": {
+          "Labor": 1.83,
+          "Coalition": 2.3,
+          "Other": 9.0
+        }
+      },
+      {
+        "source": "BetTom",
+        "odds": {
+          "Labor": 1.8,
+          "Coalition": 2.2,
+          "Other": 8.0
+        }
+      },
+      {
+        "source": "Betfair",
+        "odds": {
+          "Labor": 2.08,
+          "Coalition": 1.87,
+          "Other": 7.86
+        }
+      },
+      {
+        "source": "SkyBet",
+        "odds": {
+          "Coalition": 2.0
+        }
+      },
+      {
+        "source": "Paddy Power",
+        "odds": {
+          "Coalition": 2.0
+        }
       }
     ],
     "aggregate": {
-      "Labor": 2.06,
-      "Coalition": 2.045,
-      "Other": 7
+      "Labor": 1.895,
+      "Coalition": 2.126,
+      "Other": 8.123
     }
   }
 ]
