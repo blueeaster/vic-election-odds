@@ -670,5 +670,30 @@
       "Coalition": 1.727,
       "Other": 8.882
     }
+  },
+  {
+    "date": "2026-06-11",
+    "sources": [
+      {
+        "source": "Sportsbet",
+        "odds": {
+          "Labor": 2.78,
+          "Coalition": 1.69
+        }
+      },
+      {
+        "source": "TAB",
+        "odds": {
+          "Labor": 2.85,
+          "Coalition": 1.6,
+          "Other": 6.5
+        }
+      }
+    ],
+    "aggregate": {
+      "Labor": 2.815,
+      "Coalition": 1.645,
+      "Other": 6.5
+    }
   }
 ]
