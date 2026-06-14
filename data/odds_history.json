@@ -939,15 +939,15 @@
       {
         "source": "TAB",
         "odds": {
-          "Labor": 3.2,
-          "Coalition": 1.45,
+          "Labor": 3.3,
+          "Coalition": 1.42,
           "Other": 7.5
         }
       }
     ],
     "aggregate": {
-      "Labor": 3.145,
-      "Coalition": 1.57,
+      "Labor": 3.195,
+      "Coalition": 1.555,
       "Other": 7.5
     }
   }
