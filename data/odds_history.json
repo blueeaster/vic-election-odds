@@ -1289,15 +1289,15 @@
       {
         "source": "Sportsbet",
         "odds": {
-          "Labor": 3.35,
+          "Labor": 3.37,
           "Coalition": 1.5
         }
       },
       {
         "source": "TAB",
         "odds": {
-          "Labor": 3.3,
-          "Coalition": 1.42,
+          "Labor": 3.1,
+          "Coalition": 1.47,
           "Other": 7.5
         }
       },
@@ -1356,15 +1356,15 @@
       {
         "source": "Betfair",
         "odds": {
-          "Coalition": 1.34,
-          "Labor": 3.5,
+          "Coalition": 1.36,
+          "Labor": 3.55,
           "Other": 9.82
         }
       }
     ],
     "aggregate": {
-      "Labor": 2.905,
-      "Coalition": 1.501,
+      "Labor": 2.889,
+      "Coalition": 1.508,
       "Other": 9.903
     }
   }
