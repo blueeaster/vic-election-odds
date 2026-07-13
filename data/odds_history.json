@@ -2617,20 +2617,20 @@
       {
         "source": "SkyBet",
         "odds": {
-          "Coalition": 1.57
+          "Coalition": 1.53
         }
       },
       {
         "source": "Paddy Power",
         "odds": {
-          "Coalition": 1.57
+          "Coalition": 1.53
         }
       },
       {
         "source": "Betfair",
         "odds": {
           "Coalition": 1.6,
-          "Labor": 2.39,
+          "Labor": 2.67,
           "Other": 6.49
         }
       },
@@ -2650,8 +2650,8 @@
       }
     ],
     "aggregate": {
-      "Labor": 2.71,
-      "Coalition": 1.525,
+      "Labor": 2.78,
+      "Coalition": 1.505,
       "Other": 29.872
     }
   }
