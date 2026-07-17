@@ -2780,5 +2780,72 @@
       "Coalition": 1.507,
       "Other": 25.516
     }
+  },
+  {
+    "date": "2026-07-17",
+    "sources": [
+      {
+        "source": "Sportsbet",
+        "odds": {
+          "Labor": 3.0,
+          "Coalition": 1.55
+        }
+      },
+      {
+        "source": "TAB",
+        "odds": {
+          "Labor": 2.7,
+          "Coalition": 1.53,
+          "Other": 7.5
+        }
+      },
+      {
+        "source": "bet365",
+        "odds": {
+          "Coalition": 1.36,
+          "Labor": 3.25,
+          "Other": 11.0
+        }
+      },
+      {
+        "source": "SkyBet",
+        "odds": {
+          "Coalition": 1.53
+        }
+      },
+      {
+        "source": "Paddy Power",
+        "odds": {
+          "Coalition": 1.53
+        }
+      },
+      {
+        "source": "Betfair",
+        "odds": {
+          "Coalition": 1.59,
+          "Labor": 2.49,
+          "Other": 7.86
+        }
+      },
+      {
+        "source": "BetMGM",
+        "odds": {
+          "Labor": 2.75,
+          "Other": 51.0
+        }
+      },
+      {
+        "source": "Virgin Bet",
+        "odds": {
+          "Labor": 2.75,
+          "Other": 51.0
+        }
+      }
+    ],
+    "aggregate": {
+      "Labor": 2.823,
+      "Coalition": 1.515,
+      "Other": 25.672
+    }
   }
 ]
