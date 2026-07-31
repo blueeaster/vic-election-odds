@@ -3425,21 +3425,6 @@
     "date": "2026-08-01",
     "sources": [
       {
-        "source": "Sportsbet",
-        "odds": {
-          "Labor": 2.71,
-          "Coalition": 1.56
-        }
-      },
-      {
-        "source": "TAB",
-        "odds": {
-          "Labor": 2.75,
-          "Coalition": 1.5,
-          "Other": 7.5
-        }
-      },
-      {
         "source": "bet365",
         "odds": {
           "Coalition": 1.45,
@@ -3483,9 +3468,9 @@
       }
     ],
     "aggregate": {
-      "Labor": 2.703,
-      "Coalition": 1.527,
-      "Other": 26.864
+      "Labor": 2.69,
+      "Coalition": 1.525,
+      "Other": 31.705
     }
   }
 ]
