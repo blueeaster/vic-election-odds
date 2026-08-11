@@ -3849,7 +3849,7 @@
         "source": "Betfair",
         "odds": {
           "Coalition": 1.47,
-          "Labor": 2.96,
+          "Labor": 3.06,
           "Other": 9.82
         }
       },
@@ -3862,7 +3862,7 @@
       }
     ],
     "aggregate": {
-      "Labor": 2.84,
+      "Labor": 2.865,
       "Coalition": 1.523,
       "Other": 35.205
     }
