@@ -4097,7 +4097,7 @@
         "odds": {
           "Coalition": 1.27,
           "Labor": 3.45,
-          "Other": 9.82
+          "Other": 13.7
         }
       },
       {
@@ -4111,7 +4111,7 @@
     "aggregate": {
       "Labor": 3.117,
       "Coalition": 1.335,
-      "Other": 29.94
+      "Other": 31.233
     }
   }
 ]
