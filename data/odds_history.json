@@ -4542,5 +4542,38 @@
       "Coalition": 1.35,
       "Other": 40.027
     }
+  },
+  {
+    "date": "2026-09-01",
+    "sources": [
+      {
+        "source": "bet365",
+        "odds": {
+          "Coalition": 1.25,
+          "Labor": 4.0,
+          "Other": 12.0
+        }
+      },
+      {
+        "source": "Betfair",
+        "odds": {
+          "Coalition": 1.45,
+          "Labor": 3.5,
+          "Other": 7.08
+        }
+      },
+      {
+        "source": "Virgin Bet",
+        "odds": {
+          "Labor": 3.5,
+          "Other": 101.0
+        }
+      }
+    ],
+    "aggregate": {
+      "Labor": 3.667,
+      "Coalition": 1.35,
+      "Other": 40.027
+    }
   }
 ]
