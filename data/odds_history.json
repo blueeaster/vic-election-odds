@@ -4594,19 +4594,12 @@
           "Labor": 3.6,
           "Other": 7.08
         }
-      },
-      {
-        "source": "Virgin Bet",
-        "odds": {
-          "Labor": 3.5,
-          "Other": 101.0
-        }
       }
     ],
     "aggregate": {
-      "Labor": 3.7,
+      "Labor": 3.8,
       "Coalition": 1.32,
-      "Other": 40.027
+      "Other": 9.54
     }
   }
 ]
