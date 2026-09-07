@@ -4721,15 +4721,15 @@
         "source": "Betfair",
         "odds": {
           "Coalition": 1.39,
-          "Labor": 3.6,
-          "Other": 5.9
+          "Labor": 4.23,
+          "Other": 7.86
         }
       }
     ],
     "aggregate": {
-      "Labor": 4.3,
+      "Labor": 4.615,
       "Coalition": 1.32,
-      "Other": 6.7
+      "Other": 7.68
     }
   }
 ]
