@@ -4764,8 +4764,8 @@
       {
         "source": "bet365",
         "odds": {
-          "Coalition": 1.25,
-          "Labor": 5.0,
+          "Coalition": 1.33,
+          "Labor": 4.0,
           "Other": 7.5
         }
       },
@@ -4779,8 +4779,8 @@
       }
     ],
     "aggregate": {
-      "Labor": 4.52,
-      "Coalition": 1.33,
+      "Labor": 4.02,
+      "Coalition": 1.37,
       "Other": 8.465
     }
   }
