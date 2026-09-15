@@ -4930,14 +4930,14 @@
         "odds": {
           "Coalition": 1.38,
           "Labor": 4.92,
-          "Other": 9.43
+          "Other": 9.62
         }
       }
     ],
     "aggregate": {
       "Labor": 4.46,
       "Coalition": 1.355,
-      "Other": 8.465
+      "Other": 8.56
     }
   }
 ]
