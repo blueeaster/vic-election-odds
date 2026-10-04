@@ -5393,5 +5393,43 @@
       "Coalition": 1.365,
       "Other": 6.21
     }
+  },
+  {
+    "date": "2026-10-04",
+    "sources": [
+      {
+        "source": "bet365",
+        "odds": {
+          "Coalition": 1.33,
+          "Labor": 4.25,
+          "Other": 7.5
+        }
+      },
+      {
+        "source": "SkyBet",
+        "odds": {
+          "Coalition": 1.36
+        }
+      },
+      {
+        "source": "Paddy Power",
+        "odds": {
+          "Coalition": 1.36
+        }
+      },
+      {
+        "source": "Betfair",
+        "odds": {
+          "Coalition": 1.42,
+          "Labor": 3.94,
+          "Other": 7.86
+        }
+      }
+    ],
+    "aggregate": {
+      "Labor": 4.095,
+      "Coalition": 1.368,
+      "Other": 7.68
+    }
   }
 ]
