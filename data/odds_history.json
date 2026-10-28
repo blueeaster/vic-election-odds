@@ -5532,5 +5532,30 @@
       "Coalition": 1.81,
       "Other": 41
     }
+  },
+  {
+    "date": "2026-10-28",
+    "sources": [
+      {
+        "source": "Sportsbet",
+        "odds": {
+          "Labor": 5.5,
+          "Coalition": 1.25
+        }
+      },
+      {
+        "source": "TAB",
+        "odds": {
+          "Coalition": 2.4,
+          "Labor": 7.5,
+          "Other": 41
+        }
+      }
+    ],
+    "aggregate": {
+      "Labor": 6.5,
+      "Coalition": 1.825,
+      "Other": 41
+    }
   }
 ]
