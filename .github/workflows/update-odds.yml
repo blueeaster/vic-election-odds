@@ -1,0 +1,54 @@
+name: Update Vic Election Odds
+
+on:
+  schedule:
+    # 7:00 AM AEDT (UTC+11) = 20:00 UTC previous day
+    # Runs every day at 20:00 UTC = 07:00 Melbourne time
+    - cron: '0 20 * * *'
+  workflow_dispatch:   # Also allows manual runs from the GitHub Actions tab
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  update-odds:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run odds scraper
+        run: python odds_tracker.py
+        env:
+          # Optional: add these in GitHub Settings → Secrets & variables → Actions
+          BETFAIR_APP_KEY: ${{ secrets.BETFAIR_APP_KEY }}
+          BETFAIR_USER:    ${{ secrets.BETFAIR_USER }}
+          BETFAIR_PASS:    ${{ secrets.BETFAIR_PASS }}
+          BETR_API_URL:    ${{ secrets.BETR_API_URL }}
+          TAB_API_URL:     ${{ secrets.TAB_API_URL }}
+
+      - name: Commit and push updated files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html data/odds_history.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit — scrape returned no new data"
+          else
+            git commit -m "Update odds $(TZ='Australia/Melbourne' date +%Y-%m-%d)"
+            git push
+          fi

@@ -8,9 +8,10 @@ Usage:
   python3 odds_tracker.py --build-only   # rebuild HTML from stored data
   python3 odds_tracker.py --seed-demo    # inject demo data for testing
 
-Dependencies:
-  pip3 install requests beautifulsoup4 playwright --user
-  python3 -m playwright install chromium
+NOTE ON GEO-RESTRICTIONS:
+  TAB and Betr are geo-fenced to Australian IPs.
+  When running via GitHub Actions (US servers), only Sportsbet and Betfair work.
+  To include TAB/Betr, run from an Australian IP or use a self-hosted runner.
 """
 
 import argparse
@@ -20,7 +21,7 @@ import os
 import re
 import statistics
 import sys
-from collections import defaultdict
+import time
 from pathlib import Path
 
 import requests
@@ -32,216 +33,160 @@ DATA_FILE = DATA_DIR / "odds_history.json"
 OUTPUT_HTML = Path(__file__).parent / "index.html"
 OUTCOMES = ["Labor", "Coalition", "Other"]
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-AU,en;q=0.9",
+}
 
-# ---------------------------------------------------------------------------
-# SCRAPERS
-# ---------------------------------------------------------------------------
 
 def scrape_sportsbet():
+    """
+    Sportsbet server-side renders odds in a window.__PRELOADED_STATE__ JS blob.
+    Decimal odds: winPrice = {num: N, den: D} → (N/D) + 1
+    Falls back to multiple regex patterns for resilience.
+    """
     url = (
         "https://www.sportsbet.com.au/betting/politics/vic-politics/"
         "victorian-state-election-sworn-in-government-9186918"
     )
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0.0.0 Safari/537.36"
-        )
-    }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(url, headers=HEADERS, timeout=20)
         r.raise_for_status()
         text = r.text
+
+        # Check we got actual content (not a bot-block redirect)
+        if "__PRELOADED_STATE__" not in text and "winPrice" not in text:
+            print("  [!] Sportsbet: page loaded but no odds data found "
+                  "(possible bot-block or URL change)", file=sys.stderr)
+            return None
+
         odds = {}
         search_map = [
-            ("Labor", '"name":"Labor"'),
+            ("Labor",     '"name":"Labor"'),
             ("Coalition", '"name":"Coalition"'),
-            ("Other", '"name":"Any Other Result"'),
+            ("Other",     '"name":"Any Other Result"'),
         ]
+        # Pattern 1: standard winPrice block
+        price_pattern = re.compile(
+            r'"winPrice"\s*:\s*\{"num"\s*:\s*(\d+)\s*,\s*"den"\s*:\s*(\d+)\}'
+        )
+        # Pattern 2: price as a decimal directly
+        decimal_pattern = re.compile(r'"price"\s*:\s*([\d.]+)')
+
         for outcome, needle in search_map:
             idx = text.find(needle)
-            while idx != -1:
-                chunk = text[idx:idx + 300]
-                m = re.search(
-                    r'"winPrice"\s*:\s*\{"num"\s*:\s*(\d+)\s*,\s*"den"\s*:\s*(\d+)\}',
-                    chunk,
-                )
+            attempts = 0
+            while idx != -1 and attempts < 5:
+                chunk = text[idx: idx + 400]
+                m = price_pattern.search(chunk)
                 if m:
-                    num = int(m.group(1))
-                    den = int(m.group(2))
+                    num, den = int(m.group(1)), int(m.group(2))
                     if den > 0:
                         odds[outcome] = round(num / den + 1, 2)
                     break
+                # Fallback: look for a direct decimal price
+                m2 = decimal_pattern.search(chunk)
+                if m2:
+                    val = float(m2.group(1))
+                    if 1.01 < val < 50:   # sanity-check range
+                        odds[outcome] = round(val, 2)
+                    break
                 idx = text.find(needle, idx + 1)
+                attempts += 1
+
         if odds:
+            print("    + Sportsbet: {}".format(odds))
             return {"source": "Sportsbet", "odds": odds}
+        else:
+            print("  [!] Sportsbet: found page but could not parse any odds", file=sys.stderr)
+
+    except requests.exceptions.HTTPError as e:
+        print("  [!] Sportsbet HTTP error: {}".format(e), file=sys.stderr)
     except Exception as e:
         print("  [!] Sportsbet scrape failed: {}".format(e), file=sys.stderr)
     return None
 
 
 def scrape_tab():
-    api_url = (
-        "https://api.beta.tab.com.au/v1/tab-info-service/sports/Politics/"
-        "competitions/Victorian%20Politics/markets?jurisdiction=VIC"
+    """
+    TAB public REST API — GEO-FENCED TO AUSTRALIA.
+    Set TAB_API_URL env var once you discover the correct endpoint via Chrome DevTools.
+    See project brief for discovery instructions.
+    """
+    api_url = os.environ.get(
+        "TAB_API_URL",
+        "https://api.beta.tab.com.au/v1/tab-info-service/sports/"
+        "politics/competitions/Victorian%20Politics"
     )
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36"
-        ),
-        "Accept": "application/json",
-    }
     try:
-        r = requests.get(api_url, headers=headers, timeout=15)
+        r = requests.get(api_url, headers={**HEADERS, "Accept": "application/json"}, timeout=15)
         if r.status_code == 200:
-            data = r.json()
+            raw = r.text
             odds = {}
-            matches = data.get("matches", [])
-            for match in matches:
-                for market in match.get("markets", []):
-                    for prop in market.get("propositions", []):
-                        name = prop.get("name", "")
-                        win = prop.get("returnWin", 0)
-                        if "labor" in name.lower() or "labour" in name.lower():
-                            odds["Labor"] = win
-                        elif "coalition" in name.lower() or "liberal" in name.lower():
-                            odds["Coalition"] = win
-                        elif "other" in name.lower():
-                            odds["Other"] = win
+            for outcome, name in [("Labor", "Labor"), ("Coalition", "Coalition"), ("Other", "Other")]:
+                pattern = re.compile(
+                    r'"name"\s*:\s*"[^"]*{name}[^"]*"[^{{}}]*?"returnWin"\s*:\s*([\d.]+)'.format(name=name)
+                )
+                m = pattern.search(raw)
+                if m:
+                    odds[outcome] = float(m.group(1))
             if odds:
+                print("    + TAB: {}".format(odds))
                 return {"source": "TAB", "odds": odds}
+            else:
+                print("  [!] TAB: connected but could not parse odds — JSON structure may differ", file=sys.stderr)
+                print("  [i] TAB first 300 chars: {}".format(raw[:300]), file=sys.stderr)
+        elif r.status_code in (403, 451):
+            print("  [!] TAB: HTTP {} — likely geo-blocked (Australian IPs only)".format(r.status_code), file=sys.stderr)
         else:
-            print("  [!] TAB returned {} (geo-blocked or wrong endpoint?)".format(r.status_code), file=sys.stderr)
+            print("  [!] TAB: HTTP {} — wrong endpoint or geo-blocked".format(r.status_code), file=sys.stderr)
     except Exception as e:
         print("  [!] TAB scrape failed: {}".format(e), file=sys.stderr)
     return None
 
 
-def scrape_oddschecker():
-    BOOKIE_MAP = {
-        "B3": "bet365", "WH": "William Hill", "UN": "Unibet",
-        "FR": "Betfred", "SX": "Spreadex", "LD": "Ladbrokes UK",
-        "VC": "BetVictor", "KN": "BetMGM", "BY": "BoyleSports",
-        "OE": "10bet", "S6": "Star Sports", "PUP": "PricedUp",
-        "G5": "BetGoodwin", "VE": "Virgin Bet", "QN": "QuinnBet",
-        "WA": "Betway", "CE": "Coral", "BTT": "BetTom",
-        "BRS": "BresBet", "SK": "SkyBet", "PP": "Paddy Power",
-        "AKB": "AK Bets", "BF": "Betfair", "MA": "Matchbook",
-    }
-    OUTCOME_MAP = {
-        "australian labor party": "Labor",
-        "labor": "Labor",
-        "labour": "Labor",
-        "coalition": "Coalition",
-        "any other party": "Other",
-        "any other": "Other",
-        "other": "Other",
-    }
-
-    url = (
-        "https://www.oddschecker.com/politics/australian-politics/"
-        "state-elections/victoria-state-election"
-    )
-
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/148.0.0.0 Safari/537.36"
-                ),
-                locale="en-GB",
-            )
-            page = context.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(3000)
-            try:
-                page.wait_for_selector("tr[data-bname]", timeout=10000)
-            except Exception:
-                pass
-            html = page.content()
-            browser.close()
-
-        soup = BeautifulSoup(html, "html.parser")
-        rows = soup.find_all("tr", attrs={"data-bname": True})
-        if not rows:
-            rows = soup.find_all("tr", attrs={"data-name": True})
-
-        if not rows:
-            print("  [!] Oddschecker: no runner rows found after browser load", file=sys.stderr)
-            return []
-
-        bookie_odds = defaultdict(dict)
-
-        for row in rows:
-            runner_name = (row.get("data-bname") or row.get("data-name") or "").lower().strip()
-            outcome = None
-            for key, val in OUTCOME_MAP.items():
-                if key in runner_name:
-                    outcome = val
-                    break
-            if not outcome:
-                continue
-
-            cells = row.find_all("td", attrs={"data-bk": True})
-            for cell in cells:
-                bk_code = cell.get("data-bk", "")
-                if bk_code not in BOOKIE_MAP:
-                    continue
-                decimal_odds = None
-                odig = cell.get("data-odig")
-                if odig:
-                    try:
-                        decimal_odds = round(float(odig), 2)
-                    except ValueError:
-                        pass
-                if not decimal_odds:
-                    frac = cell.get("data-o")
-                    if frac and "/" in frac:
-                        try:
-                            num, den = frac.split("/")
-                            decimal_odds = round(int(num) / int(den) + 1, 2)
-                        except Exception:
-                            pass
-                if decimal_odds and decimal_odds > 1.0:
-                    bookie_odds[BOOKIE_MAP[bk_code]][outcome] = decimal_odds
-
-        sources = [{"source": s, "odds": o} for s, o in bookie_odds.items() if o]
-        print("    + {} bookmakers from Oddschecker".format(len(sources)))
-        return sources
-
-    except Exception as e:
-        print("  [!] Oddschecker scrape failed: {}".format(e), file=sys.stderr)
-        return []
-
-
 def scrape_betr():
+    """
+    Betr — JavaScript SPA, needs XHR endpoint discovered via Chrome DevTools.
+    GEO-FENCED TO AUSTRALIA.
+    Set BETR_API_URL env var once discovered.
+    """
     betr_url = os.environ.get("BETR_API_URL", "")
     if not betr_url:
-        print("  [!] Betr: BETR_API_URL not configured - skipping", file=sys.stderr)
+        print("  [!] Betr: BETR_API_URL not set — skipping", file=sys.stderr)
         return None
     try:
-        r = requests.get(betr_url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"}, timeout=10)
+        r = requests.get(
+            betr_url,
+            headers={**HEADERS, "Accept": "application/json"},
+            timeout=15
+        )
         if r.status_code == 200:
-            print("  [i] Betr returned data - parse logic needed", file=sys.stderr)
-            print("  [i] First 300 chars: {}".format(r.text[:300]), file=sys.stderr)
+            print("  [i] Betr: got data — parse logic needed. First 300 chars:", file=sys.stderr)
+            print("  [i] {}".format(r.text[:300]), file=sys.stderr)
+        else:
+            print("  [!] Betr: HTTP {}".format(r.status_code), file=sys.stderr)
     except Exception as e:
         print("  [!] Betr scrape failed: {}".format(e), file=sys.stderr)
     return None
 
 
 def scrape_betfair():
-    app_key = os.environ.get("BETFAIR_APP_KEY", "")
+    """
+    Betfair Exchange API — works globally, no geo-restriction.
+    Requires free account + API key from developer.betfair.com
+    Set env vars: BETFAIR_APP_KEY, BETFAIR_USER, BETFAIR_PASS
+    """
+    app_key  = os.environ.get("BETFAIR_APP_KEY", "")
     username = os.environ.get("BETFAIR_USER", "")
     password = os.environ.get("BETFAIR_PASS", "")
     if not all([app_key, username, password]):
-        print("  [!] Betfair: credentials not configured - skipping", file=sys.stderr)
+        print("  [!] Betfair: credentials not configured — skipping", file=sys.stderr)
         return None
     market_id = "1.240828208"
     try:
@@ -249,26 +194,42 @@ def scrape_betfair():
             "https://identitysso.betfair.com.au/api/login",
             data={"username": username, "password": password},
             headers={"X-Application": app_key, "Accept": "application/json"},
-            timeout=10,
+            timeout=15,
         )
         token = login_resp.json().get("token")
         if not token:
-            print("  [!] Betfair login failed", file=sys.stderr)
+            print("  [!] Betfair: login failed — check credentials", file=sys.stderr)
             return None
-        auth = {"X-Application": app_key, "X-Authentication": token, "Content-Type": "application/json"}
+
+        auth = {
+            "X-Application": app_key,
+            "X-Authentication": token,
+            "Content-Type": "application/json",
+        }
+
+        # Get runner names
         cat_resp = requests.post(
             "https://api.betfair.com/exchange/betting/rest/v1.0/listMarketCatalogue/",
-            json={"filter": {"marketIds": [market_id]}, "marketProjection": ["RUNNER_DESCRIPTION"], "maxResults": 1},
-            headers=auth, timeout=10,
+            json={
+                "filter": {"marketIds": [market_id]},
+                "marketProjection": ["RUNNER_DESCRIPTION"],
+                "maxResults": 1,
+            },
+            headers=auth, timeout=15,
         )
         runner_names = {}
         for cat in cat_resp.json():
             for runner in cat.get("runners", []):
                 runner_names[runner["selectionId"]] = runner.get("runnerName", "")
+
+        # Get prices
         book_resp = requests.post(
             "https://api.betfair.com/exchange/betting/rest/v1.0/listMarketBook/",
-            json={"marketIds": [market_id], "priceProjection": {"priceData": ["EX_BEST_OFFERS"]}},
-            headers=auth, timeout=10,
+            json={
+                "marketIds": [market_id],
+                "priceProjection": {"priceData": ["EX_BEST_OFFERS"]},
+            },
+            headers=auth, timeout=15,
         )
         odds = {}
         for mkt in book_resp.json():
@@ -283,16 +244,20 @@ def scrape_betfair():
                         odds["Coalition"] = price
                     else:
                         odds["Other"] = price
+
         if odds:
+            print("    + Betfair Exchange: {}".format(odds))
             return {"source": "Betfair Exch", "odds": odds}
+        else:
+            print("  [!] Betfair: connected but no odds found", file=sys.stderr)
+
     except Exception as e:
         print("  [!] Betfair scrape failed: {}".format(e), file=sys.stderr)
     return None
 
 
 # ---------------------------------------------------------------------------
-# DATA MANAGEMENT
-# ---------------------------------------------------------------------------
+# Data management
 
 def load_history():
     if DATA_FILE.exists():
@@ -318,19 +283,22 @@ def add_snapshot(history, snapshot):
 def aggregate_odds(sources):
     agg = {}
     for outcome in OUTCOMES:
-        prices = [s.get("odds", {}).get(outcome) for s in sources if s.get("odds", {}).get(outcome)]
+        prices = [
+            s.get("odds", {}).get(outcome)
+            for s in sources
+            if s.get("odds", {}).get(outcome)
+        ]
         if prices:
             agg[outcome] = round(statistics.mean(prices), 3)
     return agg
 
 
 # ---------------------------------------------------------------------------
-# HTML GENERATION
-# ---------------------------------------------------------------------------
+# HTML generation
 
 def generate_html(history):
-    latest = history[-1] if history else None
-    weekly = []
+    latest  = history[-1] if history else None
+    weekly  = []
     seen_weeks = set()
     for entry in reversed(history):
         dt = datetime.datetime.fromisoformat(entry["date"])
@@ -339,6 +307,7 @@ def generate_html(history):
         if wk not in seen_weeks:
             seen_weeks.add(wk)
             weekly.append(entry)
+
     chart_dates, chart_labor, chart_coalition = [], [], []
     for entry in history:
         agg = entry.get("aggregate", {})
@@ -347,7 +316,7 @@ def generate_html(history):
             chart_labor.append(agg["Labor"])
             chart_coalition.append(agg["Coalition"])
 
-    updated_str = latest["date"] if latest else "No data"
+    updated_str = latest["date"] if latest else "No data yet"
     p = []
 
     p.append("""<!DOCTYPE html>
@@ -384,12 +353,12 @@ footer{text-align:center;padding:2rem 0;border-top:1px solid var(--border);color
 @media(max-width:700px){.container{padding:1rem}table{font-size:0.78rem}thead th,tbody td{padding:0.4rem}}
 </style></head><body><div class="container">
 <header><h1>Victorian State Election 2026</h1>
-<div class="subtitle">Betting Odds Tracker - Payout on $1 AUD Bet</div>
+<div class="subtitle">Betting Odds Tracker — Payout on $1 AUD Bet</div>
 <div class="updated">Last updated: """ + updated_str + """ AEST</div></header>
 """)
 
-    # Section 1
-    p.append('<div class="section"><h2>1. Current Odds - All Sources</h2>')
+    # Section 1 — Current odds
+    p.append('<div class="section"><h2>1. Current Odds — All Sources</h2>')
     if latest and latest.get("sources"):
         sources = latest["sources"]
         agg = latest.get("aggregate", {})
@@ -419,7 +388,7 @@ footer{text-align:center;padding:2rem 0;border-top:1px solid var(--border);color
         p.append("<p>No data available yet.</p>")
     p.append("</div>")
 
-    # Section 2
+    # Section 2 — Weekly snapshot
     p.append('<div class="section"><h2>2. Weekly Snapshot (Sunday 5pm AEST)</h2>')
     if weekly:
         p.append('<table><thead><tr><th>Week Ending</th><th>Labor</th><th>Coalition</th><th>Other</th><th>Sources</th></tr></thead><tbody>')
@@ -436,10 +405,13 @@ footer{text-align:center;padding:2rem 0;border-top:1px solid var(--border);color
         p.append("<p>Not enough data yet.</p>")
     p.append("</div>")
 
-    # Section 3
+    # Section 3 — Chart
     p.append('<div class="section"><h2>3. Aggregate Odds Over Time</h2>')
     p.append('<div class="chart-wrap">')
-    p.append('<div class="legend-custom"><div class="legend-item"><div class="legend-dot" style="background:var(--labor-red)"></div> Labor</div><div class="legend-item"><div class="legend-dot" style="background:var(--coalition-blue)"></div> Coalition</div></div>')
+    p.append('<div class="legend-custom">'
+             '<div class="legend-item"><div class="legend-dot" style="background:var(--labor-red)"></div> Labor</div>'
+             '<div class="legend-item"><div class="legend-dot" style="background:var(--coalition-blue)"></div> Coalition</div>'
+             '</div>')
     p.append('<canvas id="oddsChart" height="90"></canvas></div></div>')
     p.append("<script>")
     p.append('new Chart(document.getElementById("oddsChart"),{type:"line",data:{')
@@ -449,7 +421,7 @@ footer{text-align:center;padding:2rem 0;border-top:1px solid var(--border);color
     p.append('{label:"Coalition $1 payout",data:' + json.dumps(chart_coalition))
     p.append(',borderColor:"#1e88e5",backgroundColor:"rgba(30,136,229,0.08)",fill:true,tension:0.3,pointRadius:3,borderWidth:2.5}')
     p.append(']},options:{responsive:true,interaction:{mode:"index",intersect:false},plugins:{legend:{display:false},')
-    p.append('tooltip:{backgroundColor:"#161b22",borderColor:"#2d333b",borderWidth:1,callbacks:{label:function(c){return c.dataset.label+": $"+c.parsed.y.toFixed(2)}}}},')
+    p.append('tooltip:{backgroundColor:"#161b22",borderColor:"#2d333b",borderWidth:1,callbacks:{label:function(c){return c.dataset.label+": $"+c.parsed.y.toFixed(2)}}}}},')
     p.append('scales:{x:{grid:{color:"rgba(45,51,59,0.5)"},ticks:{color:"#8b949e",maxRotation:45,font:{family:"JetBrains Mono",size:10}}},')
     p.append('y:{title:{display:true,text:"Payout on $1 AUD bet",color:"#8b949e"},grid:{color:"rgba(45,51,59,0.5)"},')
     p.append('ticks:{color:"#8b949e",font:{family:"JetBrains Mono",size:11},callback:function(v){return "$"+v.toFixed(2)}},min:1.0}}}});')
@@ -457,8 +429,7 @@ footer{text-align:center;padding:2rem 0;border-top:1px solid var(--border);color
 
     p.append("""<div class="note"><strong>Methodology:</strong> Decimal odds = total payout on a $1 AUD bet
 (e.g. $1.80 = $0.80 profit + $1.00 stake). "Aggregate" = arithmetic mean across all sources.
-Weekly snapshots use the closest daily reading to Sunday 5pm AEST. UK bookmaker fractional odds
-(e.g. 4/5) are converted to decimal (4/5 + 1 = $1.80) — currency is irrelevant to the ratio.
+Weekly snapshots use the closest daily reading to Sunday 5pm AEST.
 <br><br><strong>Not for betting or wagering purposes.</strong> For political analysis and public interest only.</div>
 <footer>Victorian State Election 2026 Odds Tracker &middot; Data from publicly listed bookmaker prices &middot; Not affiliated with any wagering operator</footer>
 </div></body></html>""")
@@ -469,37 +440,42 @@ Weekly snapshots use the closest daily reading to Sunday 5pm AEST. UK bookmaker 
 
 
 # ---------------------------------------------------------------------------
-# DEMO DATA
-# ---------------------------------------------------------------------------
+# Demo data
 
 def seed_demo_data():
     import random
     random.seed(42)
     history = []
-    base = datetime.date(2025, 3, 30)
+    base = datetime.date(2026, 5, 1)
     lp, cp = 1.85, 2.30
-    for d in range(56):
+    for d in range(170):
         dt = base + datetime.timedelta(days=d)
-        lp = round(max(1.2, min(3.5, lp + random.gauss(0, 0.02))), 2)
-        cp = round(max(1.2, min(4.0, cp + random.gauss(0, 0.025))), 2)
+        if dt > datetime.date.today():
+            break
+        lp = round(max(1.2, min(3.5, lp + random.gauss(0, 0.015))), 2)
+        cp = round(max(1.2, min(4.0, cp + random.gauss(0, 0.018))), 2)
         op = round(random.uniform(8, 15), 2)
         sources = [
-            {"source": "Sportsbet", "odds": {"Labor": lp, "Coalition": cp, "Other": op}},
-            {"source": "bet365", "odds": {"Labor": round(lp - 0.03, 2), "Coalition": round(cp + 0.05, 2)}},
-            {"source": "BetMGM", "odds": {"Labor": round(lp + 0.02, 2), "Coalition": cp}},
+            {"source": "Sportsbet",    "odds": {"Labor": lp, "Coalition": cp, "Other": op}},
+            {"source": "TAB",          "odds": {"Labor": round(lp - 0.03, 2), "Coalition": round(cp + 0.05, 2)}},
+            {"source": "Betfair Exch", "odds": {"Labor": round(lp + 0.02, 2), "Coalition": round(cp - 0.02, 2)}},
         ]
-        history.append({"date": dt.isoformat(), "sources": sources, "aggregate": aggregate_odds(sources)})
+        history.append({
+            "date": dt.isoformat(),
+            "sources": sources,
+            "aggregate": aggregate_odds(sources),
+        })
     return history
 
 
 # ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--build-only", action="store_true")
-    parser.add_argument("--seed-demo", action="store_true")
+    parser = argparse.ArgumentParser(description="Victorian Election 2026 Odds Tracker")
+    parser.add_argument("--build-only", action="store_true",
+                        help="Rebuild HTML from existing data, skip scraping")
+    parser.add_argument("--seed-demo", action="store_true",
+                        help="Inject demo data for testing")
     args = parser.parse_args()
 
     history = load_history()
@@ -509,42 +485,48 @@ def main():
         history = seed_demo_data()
         save_history(history)
         generate_html(history)
+        print("[+] Done — open index.html to preview")
         return
 
     if not args.build_only:
         print("[*] Scraping odds sources...")
         all_sources = []
-
-        for name, fn in [
-            ("Sportsbet", scrape_sportsbet),
-            ("TAB", scrape_tab),
-            ("Oddschecker (UK books)", scrape_oddschecker),
-            ("Betr", scrape_betr),
+        scrapers = [
+            ("Sportsbet",        scrape_sportsbet),
+            ("TAB",              scrape_tab),
+            ("Betr",             scrape_betr),
             ("Betfair Exchange", scrape_betfair),
-        ]:
+        ]
+        for name, fn in scrapers:
             print("  -> {}...".format(name))
             result = fn()
             if isinstance(result, list):
                 all_sources.extend(result)
-                print("    + {} book(s)".format(len(result)))
             elif result:
                 all_sources.append(result)
-                print("    + {}".format(result["odds"]))
 
         if all_sources:
             agg = aggregate_odds(all_sources)
-            now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=10)))
-            snapshot = {"date": now.strftime("%Y-%m-%d"), "sources": all_sources, "aggregate": agg}
+            # Use Melbourne (AEDT = UTC+11) time for the date stamp
+            melb_tz = datetime.timezone(datetime.timedelta(hours=11))
+            now = datetime.datetime.now(melb_tz)
+            snapshot = {
+                "date":      now.strftime("%Y-%m-%d"),
+                "sources":   all_sources,
+                "aggregate": agg,
+            }
             history = add_snapshot(history, snapshot)
             save_history(history)
             print("\n[+] Snapshot saved: {}".format(snapshot["date"]))
             print("    Aggregate: {}".format(agg))
         else:
-            print("\n[!] No sources returned data.")
+            print("\n[!] No sources returned data — HTML not updated", file=sys.stderr)
+            # Still rebuild HTML from existing history if any
             if not history:
-                return
+                sys.exit(1)
 
     generate_html(history)
+    print("[+] Done")
 
 
 if __name__ == "__main__":
